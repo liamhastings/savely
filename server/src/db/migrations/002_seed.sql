@@ -1,0 +1,73 @@
+-- Top-level categories
+INSERT INTO categories (name) VALUES
+  ('Income'),
+  ('Housing'),
+  ('Food & Drink'),
+  ('Transportation'),
+  ('Shopping'),
+  ('Entertainment'),
+  ('Health & Fitness'),
+  ('Bills & Utilities'),
+  ('Travel'),
+  ('Personal Care'),
+  ('Education'),
+  ('Fees & Charges'),
+  ('Transfers'),
+  ('Uncategorized')
+ON CONFLICT (name) DO NOTHING;
+
+-- Subcategories
+INSERT INTO categories (name, parent_category_id) VALUES
+  ('Groceries',        (SELECT id FROM categories WHERE name = 'Food & Drink')),
+  ('Restaurants',      (SELECT id FROM categories WHERE name = 'Food & Drink')),
+  ('Coffee Shops',     (SELECT id FROM categories WHERE name = 'Food & Drink')),
+  ('Rent',             (SELECT id FROM categories WHERE name = 'Housing')),
+  ('Gas',              (SELECT id FROM categories WHERE name = 'Transportation')),
+  ('Rideshare',        (SELECT id FROM categories WHERE name = 'Transportation')),
+  ('Public Transit',   (SELECT id FROM categories WHERE name = 'Transportation')),
+  ('Streaming',        (SELECT id FROM categories WHERE name = 'Entertainment')),
+  ('Internet & Phone', (SELECT id FROM categories WHERE name = 'Bills & Utilities')),
+  ('Gym',              (SELECT id FROM categories WHERE name = 'Health & Fitness')),
+  ('Pharmacy',         (SELECT id FROM categories WHERE name = 'Health & Fitness'))
+ON CONFLICT (name) DO NOTHING;
+
+-- Starter merchant rules (case-insensitive substring match; lower priority wins first)
+INSERT INTO categorization_rules (pattern, category_id, priority) VALUES
+  ('uber eats',    (SELECT id FROM categories WHERE name = 'Restaurants'),    10),
+  ('doordash',     (SELECT id FROM categories WHERE name = 'Restaurants'),    10),
+  ('grubhub',      (SELECT id FROM categories WHERE name = 'Restaurants'),    10),
+  ('mcdonald',     (SELECT id FROM categories WHERE name = 'Restaurants'),    20),
+  ('chipotle',     (SELECT id FROM categories WHERE name = 'Restaurants'),    20),
+  ('starbucks',    (SELECT id FROM categories WHERE name = 'Coffee Shops'),   20),
+  ('dunkin',       (SELECT id FROM categories WHERE name = 'Coffee Shops'),   20),
+  ('uber',         (SELECT id FROM categories WHERE name = 'Rideshare'),      30),
+  ('lyft',         (SELECT id FROM categories WHERE name = 'Rideshare'),      30),
+  ('shell',        (SELECT id FROM categories WHERE name = 'Gas'),            30),
+  ('chevron',      (SELECT id FROM categories WHERE name = 'Gas'),            30),
+  ('exxon',        (SELECT id FROM categories WHERE name = 'Gas'),            30),
+  ('whole foods',  (SELECT id FROM categories WHERE name = 'Groceries'),      20),
+  ('trader joe',   (SELECT id FROM categories WHERE name = 'Groceries'),      20),
+  ('safeway',      (SELECT id FROM categories WHERE name = 'Groceries'),      20),
+  ('kroger',       (SELECT id FROM categories WHERE name = 'Groceries'),      20),
+  ('costco',       (SELECT id FROM categories WHERE name = 'Groceries'),      25),
+  ('amazon',       (SELECT id FROM categories WHERE name = 'Shopping'),       40),
+  ('target',       (SELECT id FROM categories WHERE name = 'Shopping'),       40),
+  ('walmart',      (SELECT id FROM categories WHERE name = 'Shopping'),       40),
+  ('netflix',      (SELECT id FROM categories WHERE name = 'Streaming'),      20),
+  ('spotify',      (SELECT id FROM categories WHERE name = 'Streaming'),      20),
+  ('hulu',         (SELECT id FROM categories WHERE name = 'Streaming'),      20),
+  ('disney',       (SELECT id FROM categories WHERE name = 'Streaming'),      25),
+  ('comcast',      (SELECT id FROM categories WHERE name = 'Internet & Phone'), 20),
+  ('verizon',      (SELECT id FROM categories WHERE name = 'Internet & Phone'), 20),
+  ('t-mobile',     (SELECT id FROM categories WHERE name = 'Internet & Phone'), 20),
+  ('at&t',         (SELECT id FROM categories WHERE name = 'Internet & Phone'), 20),
+  ('cvs',          (SELECT id FROM categories WHERE name = 'Pharmacy'),       20),
+  ('walgreens',    (SELECT id FROM categories WHERE name = 'Pharmacy'),       20),
+  ('planet fitness', (SELECT id FROM categories WHERE name = 'Gym'),          20),
+  ('airbnb',       (SELECT id FROM categories WHERE name = 'Travel'),         20),
+  ('delta air',    (SELECT id FROM categories WHERE name = 'Travel'),         20),
+  ('united air',   (SELECT id FROM categories WHERE name = 'Travel'),         20),
+  ('venmo',        (SELECT id FROM categories WHERE name = 'Transfers'),      30),
+  ('zelle',        (SELECT id FROM categories WHERE name = 'Transfers'),      30),
+  ('payroll',      (SELECT id FROM categories WHERE name = 'Income'),         10),
+  ('direct dep',   (SELECT id FROM categories WHERE name = 'Income'),         10);
