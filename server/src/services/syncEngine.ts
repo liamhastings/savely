@@ -11,9 +11,14 @@ export interface SyncResult {
   removed: number;
 }
 
-/** Sync all linked items. Called on demand from the app and by cron. */
-export async function syncAllItems(): Promise<SyncResult[]> {
-  const { rows: items } = await pool.query("SELECT id FROM plaid_items ORDER BY id");
+/**
+ * Sync linked items: one user's when called on demand from the app (userId given),
+ * everyone's when called by cron (no userId).
+ */
+export async function syncAllItems(userId?: string): Promise<SyncResult[]> {
+  const { rows: items } = userId
+    ? await pool.query("SELECT id FROM plaid_items WHERE user_id = $1 ORDER BY id", [userId])
+    : await pool.query("SELECT id FROM plaid_items ORDER BY id");
   const results: SyncResult[] = [];
   for (const item of items) {
     results.push(await syncItem(item.id));

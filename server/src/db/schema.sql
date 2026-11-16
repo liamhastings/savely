@@ -1,13 +1,19 @@
 -- Reference schema (the migrations in ./migrations are the source of truth).
 
+-- Users live in Supabase Auth; user_id columns hold the Supabase auth.users.id.
+-- Accounts, transactions and snapshots are owned through their plaid_item.
+
 CREATE TABLE plaid_items (
   id SERIAL PRIMARY KEY,
+  user_id UUID,                     -- NULL only for rows that predate multi-user (npm run claim)
   plaid_item_id TEXT UNIQUE NOT NULL,
   access_token_encrypted TEXT NOT NULL,
   institution_name TEXT,
   sync_cursor TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE INDEX idx_plaid_items_user ON plaid_items(user_id);
 
 CREATE TABLE accounts (
   id SERIAL PRIMARY KEY,
@@ -45,10 +51,11 @@ CREATE INDEX idx_transactions_category ON transactions(category_id);
 
 CREATE TABLE budgets (
   id SERIAL PRIMARY KEY,
+  user_id UUID,
   category_id INTEGER NOT NULL REFERENCES categories(id),
   month DATE NOT NULL,              -- first day of month
   allocated_amount NUMERIC(14, 2) NOT NULL DEFAULT 0,
-  UNIQUE (category_id, month)
+  UNIQUE (user_id, category_id, month)
 );
 
 -- Daily balance snapshots taken during sync, for net-worth-over-time.

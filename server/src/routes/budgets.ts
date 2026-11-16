@@ -20,16 +20,19 @@ budgetsRouter.get("/", async (req, res, next) => {
               COALESCE((
                 SELECT SUM(t.amount)
                 FROM transactions t
+                JOIN accounts a ON a.id = t.account_id
+                JOIN plaid_items i ON i.id = a.item_id
                 JOIN categories tc ON tc.id = t.category_id
-                WHERE (tc.id = b.category_id OR tc.parent_category_id = b.category_id)
+                WHERE i.user_id = b.user_id
+                  AND (tc.id = b.category_id OR tc.parent_category_id = b.category_id)
                   AND t.amount > 0
                   AND t.date >= b.month AND t.date < b.month + INTERVAL '1 month'
               ), 0)::float AS actual_amount
        FROM budgets b
        JOIN categories c ON c.id = b.category_id
-       WHERE b.month = $1
+       WHERE b.month = $1 AND b.user_id = $2
        ORDER BY c.name`,
-      [month]
+      [month, req.userId]
     );
     res.json(rows);
   } catch (err) {
@@ -47,12 +50,12 @@ budgetsRouter.put("/", async (req, res, next) => {
       return;
     }
     const { rows } = await pool.query(
-      `INSERT INTO budgets (category_id, month, allocated_amount)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (category_id, month)
+      `INSERT INTO budgets (user_id, category_id, month, allocated_amount)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (user_id, category_id, month)
        DO UPDATE SET allocated_amount = EXCLUDED.allocated_amount
        RETURNING id, category_id, month, allocated_amount::float AS allocated_amount`,
-      [category_id, month, allocated_amount ?? 0]
+      [req.userId, category_id, month, allocated_amount ?? 0]
     );
     res.json(rows[0]);
   } catch (err) {

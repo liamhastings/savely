@@ -2,7 +2,6 @@ import "./env.js";
 import express from "express";
 import cors from "cors";
 import cron from "node-cron";
-import { authRouter } from "./routes/auth.js";
 import { plaidRouter } from "./routes/plaid.js";
 import { transactionsRouter } from "./routes/transactions.js";
 import { accountsRouter } from "./routes/accounts.js";
@@ -12,11 +11,12 @@ import { requireAuth } from "./middleware/auth.js";
 import { syncAllItems } from "./services/syncEngine.js";
 
 const app = express();
-app.use(cors());
+// WEB_ORIGIN (comma-separated) restricts which sites may call the API; unset = any origin.
+const origins = process.env.WEB_ORIGIN?.split(",").map((o) => o.trim()).filter(Boolean);
+app.use(cors(origins?.length ? { origin: origins } : undefined));
 app.use(express.json());
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
-app.use("/auth", authRouter);
 
 app.use("/plaid", requireAuth, plaidRouter);
 app.use("/transactions", requireAuth, transactionsRouter);

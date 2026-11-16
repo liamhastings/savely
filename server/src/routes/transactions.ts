@@ -11,8 +11,8 @@ transactionsRouter.get("/", async (req, res, next) => {
     const limit = Math.min(Number(req.query.limit) || 50, 200);
     const offset = Number(req.query.offset) || 0;
 
-    const where: string[] = [];
-    const params: unknown[] = [];
+    const where: string[] = ["i.user_id = $1"];
+    const params: unknown[] = [req.userId];
 
     if (typeof month === "string" && /^\d{4}-\d{2}$/.test(month)) {
       params.push(`${month}-01`);
@@ -31,17 +31,18 @@ transactionsRouter.get("/", async (req, res, next) => {
       where.push(`(t.merchant_name ILIKE $${params.length} OR t.name ILIKE $${params.length})`);
     }
 
-    const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
     params.push(limit, offset);
 
     const { rows } = await pool.query(
-      `SELECT t.id, t.amount, t.date, t.merchant_name, t.name, t.pending,
+      `SELECT t.id, t.amount::float AS amount, to_char(t.date, 'YYYY-MM-DD') AS date,
+              t.merchant_name, t.name, t.pending,
               t.category_id, c.name AS category_name,
               a.name AS account_name
        FROM transactions t
        LEFT JOIN categories c ON c.id = t.category_id
        JOIN accounts a ON a.id = t.account_id
-       ${whereSql}
+       JOIN plaid_items i ON i.id = a.item_id
+       WHERE ${where.join(" AND ")}
        ORDER BY t.date DESC, t.id DESC
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
@@ -57,9 +58,12 @@ transactionsRouter.patch("/:id", async (req, res, next) => {
   try {
     const { category_id } = req.body ?? {};
     const { rows } = await pool.query(
-      `UPDATE transactions SET category_id = $1, category_locked = TRUE
-       WHERE id = $2 RETURNING id, category_id`,
-      [category_id ?? null, Number(req.params.id)]
+      `UPDATE transactions t SET category_id = $1, category_locked = TRUE
+       FROM accounts a
+       JOIN plaid_items i ON i.id = a.item_id
+       WHERE t.id = $2 AND a.id = t.account_id AND i.user_id = $3
+       RETURNING t.id, t.category_id`,
+      [category_id ?? null, Number(req.params.id), req.userId]
     );
     if (!rows.length) {
       res.status(404).json({ error: "not found" });
@@ -71,10 +75,10 @@ transactionsRouter.patch("/:id", async (req, res, next) => {
   }
 });
 
-// On-demand sync of all linked items.
-transactionsRouter.post("/sync", async (_req, res, next) => {
+// On-demand sync of the signed-in user's linked items.
+transactionsRouter.post("/sync", async (req, res, next) => {
   try {
-    const results = await syncAllItems();
+    const results = await syncAllItems(req.userId);
     res.json({ results });
   } catch (err) {
     next(err);
@@ -94,14 +98,17 @@ transactionsRouter.get("/spending", async (req, res, next) => {
               COALESCE(parent.name, c.name, 'Uncategorized') AS category_name,
               SUM(t.amount)::float AS total
        FROM transactions t
+       JOIN accounts a ON a.id = t.account_id
+       JOIN plaid_items i ON i.id = a.item_id
        LEFT JOIN categories c ON c.id = t.category_id
        LEFT JOIN categories parent ON parent.id = c.parent_category_id
-       WHERE t.date >= $1::date AND t.date < $1::date + INTERVAL '1 month'
+       WHERE i.user_id = $2
+         AND t.date >= $1::date AND t.date < $1::date + INTERVAL '1 month'
          AND t.amount > 0
          AND COALESCE(parent.name, c.name, 'Uncategorized') NOT IN ('Income', 'Transfers')
        GROUP BY 1, 2
        ORDER BY total DESC`,
-      [month]
+      [month, req.userId]
     );
     res.json(rows);
   } catch (err) {
