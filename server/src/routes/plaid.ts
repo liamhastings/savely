@@ -8,10 +8,10 @@ import { syncItem } from "../services/syncEngine.js";
 export const plaidRouter = Router();
 
 // Step 1 of Link flow: the app asks for a link_token, opens Plaid Link with it.
-plaidRouter.post("/link-token", async (_req, res, next) => {
+plaidRouter.post("/link-token", async (req, res, next) => {
   try {
     const { data } = await plaidClient.linkTokenCreate({
-      user: { client_user_id: "owner" },
+      user: { client_user_id: req.userId },
       client_name: "Savely",
       products: [Products.Transactions],
       country_codes: [CountryCode.Us],
@@ -36,12 +36,17 @@ plaidRouter.post("/exchange", async (req, res, next) => {
     const { data } = await plaidClient.itemPublicTokenExchange({ public_token });
 
     const { rows } = await pool.query(
-      `INSERT INTO plaid_items (plaid_item_id, access_token_encrypted, institution_name)
-       VALUES ($1, $2, $3)
+      `INSERT INTO plaid_items (user_id, plaid_item_id, access_token_encrypted, institution_name)
+       VALUES ($1, $2, $3, $4)
        ON CONFLICT (plaid_item_id) DO UPDATE SET institution_name = EXCLUDED.institution_name
+         WHERE plaid_items.user_id = EXCLUDED.user_id
        RETURNING id`,
-      [data.item_id, encrypt(data.access_token), institution_name ?? null]
+      [req.userId, data.item_id, encrypt(data.access_token), institution_name ?? null]
     );
+    if (!rows.length) {
+      res.status(409).json({ error: "this institution link belongs to another user" });
+      return;
+    }
 
     const result = await syncItem(rows[0].id);
     res.json({ item_id: rows[0].id, initial_sync: result });
@@ -50,15 +55,17 @@ plaidRouter.post("/exchange", async (req, res, next) => {
   }
 });
 
-plaidRouter.get("/items", async (_req, res, next) => {
+plaidRouter.get("/items", async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       `SELECT i.id, i.institution_name, i.created_at,
               COUNT(a.id)::int AS account_count
        FROM plaid_items i
        LEFT JOIN accounts a ON a.item_id = i.id
+       WHERE i.user_id = $1
        GROUP BY i.id
-       ORDER BY i.id`
+       ORDER BY i.id`,
+      [req.userId]
     );
     res.json(rows);
   } catch (err) {

@@ -4,7 +4,3 @@ dist/
 .env.local
 .DS_Store
 *.log
-.expo/
-ios/
-android/
-web-build/
